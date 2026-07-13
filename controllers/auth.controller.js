@@ -16,8 +16,10 @@ console.log(
 // OTP STORAGE
 // ======================================================
 
-const otpStorage = new Map();
+const phoneOtpStorage = new Map();
 const emailOtpStorage = new Map();
+
+const OTP_EXPIRY = 10 * 60 * 1000;
 
 // ======================================================
 // PHONE - SEND OTP
@@ -25,9 +27,7 @@ const emailOtpStorage = new Map();
 
 const sendOtp = async (req, res) => {
   try {
-    const { phone } = req.body;
-
-    const cleanPhone = String(phone || "").trim();
+    const cleanPhone = String(req.body.phone || "").trim();
 
     if (!/^\d{10}$/.test(cleanPhone)) {
       return res.status(400).json({
@@ -39,15 +39,15 @@ const sendOtp = async (req, res) => {
     // Fixed OTP for phone testing
     const otp = "123456";
 
-    otpStorage.set(cleanPhone, otp);
+    phoneOtpStorage.set(cleanPhone, otp);
 
     console.log("========== PHONE OTP ==========");
     console.log("Phone:", cleanPhone);
     console.log("OTP:", otp);
 
     setTimeout(() => {
-      otpStorage.delete(cleanPhone);
-    }, 10 * 60 * 1000);
+      phoneOtpStorage.delete(cleanPhone);
+    }, OTP_EXPIRY);
 
     return res.status(200).json({
       success: true,
@@ -70,12 +70,10 @@ const sendOtp = async (req, res) => {
 
 const verifyOtp = async (req, res) => {
   try {
-    const { phone, otp } = req.body;
+    const cleanPhone = String(req.body.phone || "").trim();
+    const enteredOtp = String(req.body.otp || "").trim();
 
-    const cleanPhone = String(phone || "").trim();
-    const enteredOtp = String(otp || "").trim();
-
-    const storedOtp = otpStorage.get(cleanPhone);
+    const storedOtp = phoneOtpStorage.get(cleanPhone);
 
     console.log("========== VERIFY PHONE OTP ==========");
     console.log("Phone:", cleanPhone);
@@ -89,14 +87,14 @@ const verifyOtp = async (req, res) => {
       });
     }
 
-    if (String(storedOtp) !== enteredOtp) {
+    if (storedOtp !== enteredOtp) {
       return res.status(400).json({
         success: false,
         message: "Invalid OTP",
       });
     }
 
-    otpStorage.delete(cleanPhone);
+    phoneOtpStorage.delete(cleanPhone);
 
     return res.status(200).json({
       success: true,
@@ -118,9 +116,7 @@ const verifyOtp = async (req, res) => {
 
 const sendEmailOtp = async (req, res) => {
   try {
-    const { email } = req.body;
-
-    const cleanEmail = String(email || "")
+    const cleanEmail = String(req.body.email || "")
       .trim()
       .toLowerCase();
 
@@ -134,7 +130,7 @@ const sendEmailOtp = async (req, res) => {
     }
 
     if (!process.env.RESEND_API_KEY) {
-      console.error("RESEND_API_KEY is not configured");
+      console.error("❌ RESEND_API_KEY NOT FOUND");
 
       return res.status(500).json({
         success: false,
@@ -142,42 +138,36 @@ const sendEmailOtp = async (req, res) => {
       });
     }
 
-    // Generate random 6-digit OTP
+    // Generate 6-digit OTP
     const otp = Math.floor(
       100000 + Math.random() * 900000
     ).toString();
 
-    console.log("========== EMAIL OTP ==========");
-    console.log("Email:", cleanEmail);
+    console.log("========== SENDING EMAIL OTP ==========");
+    console.log("Recipient:", cleanEmail);
     console.log("OTP:", otp);
 
     // ==================================================
-    // SEND EMAIL USING RESEND
+    // SEND THROUGH RESEND
     // ==================================================
 
-    const { data, error } = await resend.emails.send({
-      // For testing with Resend
+    const result = await resend.emails.send({
       from: "Sabka Fayda <onboarding@resend.dev>",
-
       to: [cleanEmail],
-
       subject: "Sabka Fayda - Email Verification OTP",
 
       html: `
         <div style="
           font-family: Arial, sans-serif;
           max-width: 500px;
-          margin: auto;
+          margin: 30px auto;
           padding: 30px;
           text-align: center;
           border: 1px solid #eeeeee;
           border-radius: 15px;
         ">
 
-          <h1 style="
-            color: #2196F3;
-            margin-bottom: 10px;
-          ">
+          <h1 style="color: #2196F3;">
             Sabka Fayda
           </h1>
 
@@ -203,7 +193,7 @@ const sendEmailOtp = async (req, res) => {
             ${otp}
           </div>
 
-          <p style="color: #555555;">
+          <p>
             This OTP is valid for
             <strong>10 minutes</strong>.
           </p>
@@ -220,25 +210,37 @@ const sendEmailOtp = async (req, res) => {
       `,
     });
 
-    // Resend returned an error
-    if (error) {
-      console.error("========== RESEND ERROR ==========");
-      console.error(error);
+    console.log("========== RESEND RESPONSE ==========");
+    console.log(result);
 
-      return res.status(500).json({
+    // ==================================================
+    // CHECK RESEND ERROR
+    // ==================================================
+
+    if (result.error) {
+      console.error("❌ RESEND ERROR");
+      console.error("Name:", result.error.name);
+      console.error("Message:", result.error.message);
+
+      return res.status(400).json({
         success: false,
-        message: "Failed to send email OTP",
-        error: error.message,
+
+        // Actual Resend error will now show in Flutter
+        message:
+          result.error.message ||
+          "Failed to send email OTP",
       });
     }
 
-    // Store OTP only after email is successfully sent
+    // ==================================================
+    // STORE OTP ONLY AFTER EMAIL WAS SENT
+    // ==================================================
+
     emailOtpStorage.set(cleanEmail, otp);
 
     console.log("✅ EMAIL SENT SUCCESSFULLY");
-    console.log("Resend Email ID:", data?.id);
+    console.log("Email ID:", result.data?.id);
 
-    // Delete OTP after 10 minutes
     setTimeout(() => {
       emailOtpStorage.delete(cleanEmail);
 
@@ -246,7 +248,7 @@ const sendEmailOtp = async (req, res) => {
         "Email OTP expired for:",
         cleanEmail
       );
-    }, 10 * 60 * 1000);
+    }, OTP_EXPIRY);
 
     return res.status(200).json({
       success: true,
@@ -254,7 +256,7 @@ const sendEmailOtp = async (req, res) => {
     });
   } catch (error) {
     console.error(
-      "========== SEND EMAIL OTP ERROR =========="
+      "========== SEND EMAIL OTP EXCEPTION =========="
     );
 
     console.error("Message:", error.message);
@@ -262,8 +264,11 @@ const sendEmailOtp = async (req, res) => {
 
     return res.status(500).json({
       success: false,
-      message: "Failed to send email OTP",
-      error: error.message,
+
+      // Show actual error during development
+      message:
+        error.message ||
+        "Failed to send email OTP",
     });
   }
 };
@@ -274,20 +279,29 @@ const sendEmailOtp = async (req, res) => {
 
 const verifyEmailOtp = async (req, res) => {
   try {
-    const { email, otp } = req.body;
-
-    const cleanEmail = String(email || "")
+    const cleanEmail = String(req.body.email || "")
       .trim()
       .toLowerCase();
 
-    const enteredOtp = String(otp || "").trim();
+    const enteredOtp = String(req.body.otp || "").trim();
+
+    if (!cleanEmail || !enteredOtp) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and OTP are required",
+      });
+    }
+
+    if (!/^\d{6}$/.test(enteredOtp)) {
+      return res.status(400).json({
+        success: false,
+        message: "Enter a valid 6-digit OTP",
+      });
+    }
 
     const storedOtp = emailOtpStorage.get(cleanEmail);
 
-    console.log(
-      "========== VERIFY EMAIL OTP =========="
-    );
-
+    console.log("========== VERIFY EMAIL OTP ==========");
     console.log("Email:", cleanEmail);
     console.log("Entered OTP:", enteredOtp);
     console.log("Stored OTP:", storedOtp);
@@ -299,7 +313,7 @@ const verifyEmailOtp = async (req, res) => {
       });
     }
 
-    if (String(storedOtp) !== enteredOtp) {
+    if (storedOtp !== enteredOtp) {
       return res.status(400).json({
         success: false,
         message: "Invalid OTP",
@@ -316,10 +330,7 @@ const verifyEmailOtp = async (req, res) => {
       email: cleanEmail,
     });
   } catch (error) {
-    console.error(
-      "VERIFY EMAIL OTP ERROR:",
-      error
-    );
+    console.error("VERIFY EMAIL OTP ERROR:", error);
 
     return res.status(500).json({
       success: false,
