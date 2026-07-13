@@ -1,6 +1,8 @@
 const nodemailer = require("nodemailer");
 
-// ================= OTP STORAGE =================
+// ======================================================
+// OTP STORAGE
+// ======================================================
 
 // Phone OTPs
 const otpStorage = new Map();
@@ -29,13 +31,14 @@ const sendOtp = async (req, res) => {
     // Fixed OTP for phone testing
     const otp = "123456";
 
+    // Store OTP
     otpStorage.set(cleanPhone, otp);
 
     console.log("========== PHONE OTP ==========");
     console.log("Phone:", cleanPhone);
     console.log("OTP:", otp);
 
-    // Delete after 10 minutes
+    // Delete OTP after 10 minutes
     setTimeout(() => {
       otpStorage.delete(cleanPhone);
     }, 10 * 60 * 1000);
@@ -43,6 +46,8 @@ const sendOtp = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "OTP generated successfully",
+
+      // Only for testing
       demoOtp: otp,
     });
   } catch (error) {
@@ -69,6 +74,11 @@ const verifyOtp = async (req, res) => {
 
     const storedOtp = otpStorage.get(cleanPhone);
 
+    console.log("========== VERIFY PHONE OTP ==========");
+    console.log("Phone:", cleanPhone);
+    console.log("Entered OTP:", enteredOtp);
+    console.log("Stored OTP:", storedOtp);
+
     if (!storedOtp) {
       return res.status(400).json({
         success: false,
@@ -83,6 +93,7 @@ const verifyOtp = async (req, res) => {
       });
     }
 
+    // Remove OTP after successful verification
     otpStorage.delete(cleanPhone);
 
     return res.status(200).json({
@@ -104,6 +115,23 @@ const verifyOtp = async (req, res) => {
 // NODEMAILER CONFIGURATION
 // ======================================================
 
+console.log("========== EMAIL CONFIG ==========");
+console.log(
+  "EMAIL_USER:",
+  process.env.EMAIL_USER
+    ? "Loaded"
+    : "NOT LOADED"
+);
+
+console.log(
+  "EMAIL_APP_PASSWORD:",
+  process.env.EMAIL_APP_PASSWORD
+    ? "Loaded"
+    : "NOT LOADED"
+);
+
+
+// Create Gmail transporter
 const transporter = nodemailer.createTransport({
   service: "gmail",
 
@@ -115,6 +143,29 @@ const transporter = nodemailer.createTransport({
 
 
 // ======================================================
+// VERIFY GMAIL SMTP CONNECTION
+// ======================================================
+
+transporter
+  .verify()
+  .then(() => {
+    console.log(
+      "✅ Gmail SMTP connection successful"
+    );
+  })
+  .catch((error) => {
+    console.error(
+      "❌ Gmail SMTP connection failed"
+    );
+
+    console.error("Message:", error.message);
+    console.error("Code:", error.code);
+    console.error("Response:", error.response);
+    console.error("Full Error:", error);
+  });
+
+
+// ======================================================
 // EMAIL - SEND OTP
 // ======================================================
 
@@ -122,6 +173,7 @@ const sendEmailOtp = async (req, res) => {
   try {
     const { email } = req.body;
 
+    // Clean email
     const cleanEmail = String(email || "")
       .trim()
       .toLowerCase();
@@ -137,83 +189,215 @@ const sendEmailOtp = async (req, res) => {
       });
     }
 
-    // Generate random 6-digit OTP
+
+    // ==================================================
+    // GENERATE 6-DIGIT OTP
+    // ==================================================
+
     const otp = Math.floor(
       100000 + Math.random() * 900000
     ).toString();
 
-    // Store OTP
+
+    // ==================================================
+    // STORE OTP
+    // ==================================================
+
     emailOtpStorage.set(cleanEmail, otp);
 
     console.log("========== EMAIL OTP ==========");
     console.log("Email:", cleanEmail);
     console.log("OTP:", otp);
 
-    // Send email
-    await transporter.sendMail({
-      from: `"Sabka Fayda" <${process.env.EMAIL_USER}>`,
+
+    // ==================================================
+    // SEND EMAIL
+    // ==================================================
+
+    const mailOptions = {
+      from:
+        `"Sabka Fayda" <${process.env.EMAIL_USER}>`,
 
       to: cleanEmail,
 
-      subject: "Sabka Fayda - Email Verification OTP",
+      subject:
+        "Sabka Fayda - Email Verification OTP",
 
       html: `
-        <div style="
-          font-family: Arial, sans-serif;
-          max-width: 500px;
-          margin: auto;
-          padding: 30px;
-          text-align: center;
-        ">
+        <div
+          style="
+            font-family: Arial, sans-serif;
+            max-width: 500px;
+            margin: auto;
+            padding: 30px;
+            text-align: center;
+            border: 1px solid #eeeeee;
+            border-radius: 15px;
+          "
+        >
 
-          <h1 style="color: #2196F3;">
+          <h1
+            style="
+              color: #2196F3;
+              margin-bottom: 10px;
+            "
+          >
             Sabka Fayda
           </h1>
 
-          <h2>Email Verification</h2>
+          <h2>
+            Email Verification
+          </h2>
 
-          <p>
-            Use the following OTP to verify your email address:
+          <p
+            style="
+              color: #555555;
+              font-size: 16px;
+            "
+          >
+            Use the following OTP to verify
+            your email address:
           </p>
 
-          <div style="
-            font-size: 35px;
-            font-weight: bold;
-            letter-spacing: 8px;
-            color: #2196F3;
-            margin: 25px;
-          ">
+          <div
+            style="
+              font-size: 35px;
+              font-weight: bold;
+              letter-spacing: 8px;
+              color: #2196F3;
+              margin: 25px 0;
+              padding: 15px;
+              background-color: #E6F4FF;
+              border-radius: 10px;
+            "
+          >
             ${otp}
           </div>
 
-          <p>
-            This OTP is valid for 10 minutes.
+          <p
+            style="
+              color: #555555;
+            "
+          >
+            This OTP is valid for
+            <strong>10 minutes</strong>.
           </p>
 
-          <p style="color: grey;">
+          <p
+            style="
+              color: grey;
+              font-size: 13px;
+              margin-top: 30px;
+            "
+          >
             Do not share this OTP with anyone.
           </p>
 
         </div>
       `,
-    });
+    };
 
-    // Delete after 10 minutes
+
+    console.log(
+      "Attempting to send email to:",
+      cleanEmail
+    );
+
+
+    // Send the email
+    const info = await transporter.sendMail(
+      mailOptions
+    );
+
+
+    console.log(
+      "✅ EMAIL SENT SUCCESSFULLY"
+    );
+
+    console.log(
+      "Message ID:",
+      info.messageId
+    );
+
+
+    // ==================================================
+    // DELETE OTP AFTER 10 MINUTES
+    // ==================================================
+
     setTimeout(() => {
       emailOtpStorage.delete(cleanEmail);
+
+      console.log(
+        "Email OTP expired for:",
+        cleanEmail
+      );
     }, 10 * 60 * 1000);
+
+
+    // ==================================================
+    // SUCCESS RESPONSE
+    // ==================================================
 
     return res.status(200).json({
       success: true,
-      message: "OTP sent successfully to your email",
+      message:
+        "OTP sent successfully to your email",
     });
 
   } catch (error) {
-    console.error("SEND EMAIL OTP ERROR:", error);
+
+    // ==================================================
+    // DETAILED ERROR LOGGING
+    // ==================================================
+
+    console.error(
+      "========== SEND EMAIL OTP ERROR =========="
+    );
+
+    console.error(
+      "Message:",
+      error.message
+    );
+
+    console.error(
+      "Code:",
+      error.code
+    );
+
+    console.error(
+      "Response:",
+      error.response
+    );
+
+    console.error(
+      "Response Code:",
+      error.responseCode
+    );
+
+    console.error(
+      "Command:",
+      error.command
+    );
+
+    console.error(
+      "Full Error:",
+      error
+    );
+
+
+    // ==================================================
+    // ERROR RESPONSE
+    // ==================================================
 
     return res.status(500).json({
       success: false,
-      message: "Failed to send email OTP",
+
+      message:
+        "Failed to send email OTP",
+
+      // Temporary debugging
+      // Remove this in production
+      error: error.message,
     });
   }
 };
@@ -227,44 +411,97 @@ const verifyEmailOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
+
+    // Clean email
     const cleanEmail = String(email || "")
       .trim()
       .toLowerCase();
 
-    const enteredOtp = String(otp || "").trim();
 
-    const storedOtp = emailOtpStorage.get(cleanEmail);
+    // Clean entered OTP
+    const enteredOtp = String(
+      otp || ""
+    ).trim();
 
-    console.log("========== VERIFY EMAIL OTP ==========");
-    console.log("Email:", cleanEmail);
-    console.log("Entered OTP:", enteredOtp);
-    console.log("Stored OTP:", storedOtp);
 
+    // Get stored OTP
+    const storedOtp =
+      emailOtpStorage.get(cleanEmail);
+
+
+    console.log(
+      "========== VERIFY EMAIL OTP =========="
+    );
+
+    console.log(
+      "Email:",
+      cleanEmail
+    );
+
+    console.log(
+      "Entered OTP:",
+      enteredOtp
+    );
+
+    console.log(
+      "Stored OTP:",
+      storedOtp
+    );
+
+
+    // OTP not found
     if (!storedOtp) {
       return res.status(400).json({
         success: false,
-        message: "OTP expired or not found",
+        message:
+          "OTP expired or not found",
       });
     }
 
-    if (String(storedOtp) !== enteredOtp) {
+
+    // OTP does not match
+    if (
+      String(storedOtp) !==
+      enteredOtp
+    ) {
       return res.status(400).json({
         success: false,
         message: "Invalid OTP",
       });
     }
 
-    // OTP verified
-    emailOtpStorage.delete(cleanEmail);
+
+    // ==================================================
+    // OTP VERIFIED
+    // ==================================================
+
+    emailOtpStorage.delete(
+      cleanEmail
+    );
+
+
+    console.log(
+      "✅ EMAIL VERIFIED:",
+      cleanEmail
+    );
+
 
     return res.status(200).json({
       success: true,
-      message: "Email verified successfully",
+
+      message:
+        "Email verified successfully",
+
       email: cleanEmail,
     });
 
   } catch (error) {
-    console.error("VERIFY EMAIL OTP ERROR:", error);
+
+    console.error(
+      "VERIFY EMAIL OTP ERROR:",
+      error
+    );
+
 
     return res.status(500).json({
       success: false,
