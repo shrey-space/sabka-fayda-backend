@@ -4,10 +4,7 @@ const nodemailer = require("nodemailer");
 // OTP STORAGE
 // ======================================================
 
-// Phone OTPs
 const otpStorage = new Map();
-
-// Email OTPs
 const emailOtpStorage = new Map();
 
 
@@ -31,14 +28,13 @@ const sendOtp = async (req, res) => {
     // Fixed OTP for phone testing
     const otp = "123456";
 
-    // Store OTP
     otpStorage.set(cleanPhone, otp);
 
     console.log("========== PHONE OTP ==========");
     console.log("Phone:", cleanPhone);
     console.log("OTP:", otp);
 
-    // Delete OTP after 10 minutes
+    // Delete after 10 minutes
     setTimeout(() => {
       otpStorage.delete(cleanPhone);
     }, 10 * 60 * 1000);
@@ -46,8 +42,6 @@ const sendOtp = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "OTP generated successfully",
-
-      // Only for testing
       demoOtp: otp,
     });
   } catch (error) {
@@ -93,7 +87,6 @@ const verifyOtp = async (req, res) => {
       });
     }
 
-    // Remove OTP after successful verification
     otpStorage.delete(cleanPhone);
 
     return res.status(200).json({
@@ -116,11 +109,10 @@ const verifyOtp = async (req, res) => {
 // ======================================================
 
 console.log("========== EMAIL CONFIG ==========");
+
 console.log(
   "EMAIL_USER:",
-  process.env.EMAIL_USER
-    ? "Loaded"
-    : "NOT LOADED"
+  process.env.EMAIL_USER ? "Loaded" : "NOT LOADED"
 );
 
 console.log(
@@ -131,14 +123,31 @@ console.log(
 );
 
 
-// Create Gmail transporter
+// ======================================================
+// GMAIL SMTP - FORCE IPV4 + PORT 587
+// ======================================================
+
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+
+  // Use STARTTLS instead of port 465
+  port: 587,
+
+  // false because port 587 upgrades to TLS
+  secure: false,
 
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_APP_PASSWORD,
   },
+
+  // Force IPv4
+  family: 4,
+
+  // Connection timeouts
+  connectionTimeout: 20000,
+  greetingTimeout: 20000,
+  socketTimeout: 30000,
 });
 
 
@@ -149,15 +158,10 @@ const transporter = nodemailer.createTransport({
 transporter
   .verify()
   .then(() => {
-    console.log(
-      "✅ Gmail SMTP connection successful"
-    );
+    console.log("✅ Gmail SMTP connection successful");
   })
   .catch((error) => {
-    console.error(
-      "❌ Gmail SMTP connection failed"
-    );
-
+    console.error("❌ Gmail SMTP connection failed");
     console.error("Message:", error.message);
     console.error("Code:", error.code);
     console.error("Response:", error.response);
@@ -173,7 +177,6 @@ const sendEmailOtp = async (req, res) => {
   try {
     const { email } = req.body;
 
-    // Clean email
     const cleanEmail = String(email || "")
       .trim()
       .toLowerCase();
@@ -191,7 +194,7 @@ const sendEmailOtp = async (req, res) => {
 
 
     // ==================================================
-    // GENERATE 6-DIGIT OTP
+    // GENERATE RANDOM 6-DIGIT OTP
     // ==================================================
 
     const otp = Math.floor(
@@ -211,17 +214,15 @@ const sendEmailOtp = async (req, res) => {
 
 
     // ==================================================
-    // SEND EMAIL
+    // EMAIL CONTENT
     // ==================================================
 
     const mailOptions = {
-      from:
-        `"Sabka Fayda" <${process.env.EMAIL_USER}>`,
+      from: `"Sabka Fayda" <${process.env.EMAIL_USER}>`,
 
       to: cleanEmail,
 
-      subject:
-        "Sabka Fayda - Email Verification OTP",
+      subject: "Sabka Fayda - Email Verification OTP",
 
       html: `
         <div
@@ -274,11 +275,7 @@ const sendEmailOtp = async (req, res) => {
             ${otp}
           </div>
 
-          <p
-            style="
-              color: #555555;
-            "
-          >
+          <p style="color: #555555;">
             This OTP is valid for
             <strong>10 minutes</strong>.
           </p>
@@ -304,20 +301,16 @@ const sendEmailOtp = async (req, res) => {
     );
 
 
-    // Send the email
+    // ==================================================
+    // SEND EMAIL
+    // ==================================================
+
     const info = await transporter.sendMail(
       mailOptions
     );
 
-
-    console.log(
-      "✅ EMAIL SENT SUCCESSFULLY"
-    );
-
-    console.log(
-      "Message ID:",
-      info.messageId
-    );
+    console.log("✅ EMAIL SENT SUCCESSFULLY");
+    console.log("Message ID:", info.messageId);
 
 
     // ==================================================
@@ -340,63 +333,26 @@ const sendEmailOtp = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message:
-        "OTP sent successfully to your email",
+      message: "OTP sent successfully to your email",
     });
 
   } catch (error) {
-
-    // ==================================================
-    // DETAILED ERROR LOGGING
-    // ==================================================
-
     console.error(
       "========== SEND EMAIL OTP ERROR =========="
     );
 
-    console.error(
-      "Message:",
-      error.message
-    );
-
-    console.error(
-      "Code:",
-      error.code
-    );
-
-    console.error(
-      "Response:",
-      error.response
-    );
-
-    console.error(
-      "Response Code:",
-      error.responseCode
-    );
-
-    console.error(
-      "Command:",
-      error.command
-    );
-
-    console.error(
-      "Full Error:",
-      error
-    );
-
-
-    // ==================================================
-    // ERROR RESPONSE
-    // ==================================================
+    console.error("Message:", error.message);
+    console.error("Code:", error.code);
+    console.error("Response:", error.response);
+    console.error("Response Code:", error.responseCode);
+    console.error("Command:", error.command);
+    console.error("Full Error:", error);
 
     return res.status(500).json({
       success: false,
-
-      message:
-        "Failed to send email OTP",
+      message: "Failed to send email OTP",
 
       // Temporary debugging
-      // Remove this in production
       error: error.message,
     });
   }
@@ -411,20 +367,12 @@ const verifyEmailOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-
-    // Clean email
     const cleanEmail = String(email || "")
       .trim()
       .toLowerCase();
 
+    const enteredOtp = String(otp || "").trim();
 
-    // Clean entered OTP
-    const enteredOtp = String(
-      otp || ""
-    ).trim();
-
-
-    // Get stored OTP
     const storedOtp =
       emailOtpStorage.get(cleanEmail);
 
@@ -433,37 +381,22 @@ const verifyEmailOtp = async (req, res) => {
       "========== VERIFY EMAIL OTP =========="
     );
 
-    console.log(
-      "Email:",
-      cleanEmail
-    );
-
-    console.log(
-      "Entered OTP:",
-      enteredOtp
-    );
-
-    console.log(
-      "Stored OTP:",
-      storedOtp
-    );
+    console.log("Email:", cleanEmail);
+    console.log("Entered OTP:", enteredOtp);
+    console.log("Stored OTP:", storedOtp);
 
 
-    // OTP not found
+    // OTP not found or expired
     if (!storedOtp) {
       return res.status(400).json({
         success: false,
-        message:
-          "OTP expired or not found",
+        message: "OTP expired or not found",
       });
     }
 
 
-    // OTP does not match
-    if (
-      String(storedOtp) !==
-      enteredOtp
-    ) {
+    // Invalid OTP
+    if (String(storedOtp) !== enteredOtp) {
       return res.status(400).json({
         success: false,
         message: "Invalid OTP",
@@ -472,13 +405,10 @@ const verifyEmailOtp = async (req, res) => {
 
 
     // ==================================================
-    // OTP VERIFIED
+    // OTP VERIFIED SUCCESSFULLY
     // ==================================================
 
-    emailOtpStorage.delete(
-      cleanEmail
-    );
-
+    emailOtpStorage.delete(cleanEmail);
 
     console.log(
       "✅ EMAIL VERIFIED:",
@@ -488,20 +418,15 @@ const verifyEmailOtp = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-
-      message:
-        "Email verified successfully",
-
+      message: "Email verified successfully",
       email: cleanEmail,
     });
 
   } catch (error) {
-
     console.error(
       "VERIFY EMAIL OTP ERROR:",
       error
     );
-
 
     return res.status(500).json({
       success: false,
