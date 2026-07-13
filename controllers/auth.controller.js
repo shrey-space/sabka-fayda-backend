@@ -1,3 +1,8 @@
+const dns = require("node:dns");
+
+// Prefer IPv4 before IPv6
+dns.setDefaultResultOrder("ipv4first");
+
 const nodemailer = require("nodemailer");
 
 // ======================================================
@@ -6,7 +11,6 @@ const nodemailer = require("nodemailer");
 
 const otpStorage = new Map();
 const emailOtpStorage = new Map();
-
 
 // ======================================================
 // PHONE - SEND OTP
@@ -34,7 +38,6 @@ const sendOtp = async (req, res) => {
     console.log("Phone:", cleanPhone);
     console.log("OTP:", otp);
 
-    // Delete after 10 minutes
     setTimeout(() => {
       otpStorage.delete(cleanPhone);
     }, 10 * 60 * 1000);
@@ -53,7 +56,6 @@ const sendOtp = async (req, res) => {
     });
   }
 };
-
 
 // ======================================================
 // PHONE - VERIFY OTP
@@ -103,9 +105,8 @@ const verifyOtp = async (req, res) => {
   }
 };
 
-
 // ======================================================
-// NODEMAILER CONFIGURATION
+// EMAIL CONFIG
 // ======================================================
 
 console.log("========== EMAIL CONFIG ==========");
@@ -117,23 +118,17 @@ console.log(
 
 console.log(
   "EMAIL_APP_PASSWORD:",
-  process.env.EMAIL_APP_PASSWORD
-    ? "Loaded"
-    : "NOT LOADED"
+  process.env.EMAIL_APP_PASSWORD ? "Loaded" : "NOT LOADED"
 );
 
-
 // ======================================================
-// GMAIL SMTP - FORCE IPV4 + PORT 587
+// GMAIL SMTP
+// IPv4 preferred + port 587
 // ======================================================
 
 const transporter = nodemailer.createTransport({
   host: "smtp.gmail.com",
-
-  // Use STARTTLS instead of port 465
   port: 587,
-
-  // false because port 587 upgrades to TLS
   secure: false,
 
   auth: {
@@ -141,18 +136,15 @@ const transporter = nodemailer.createTransport({
     pass: process.env.EMAIL_APP_PASSWORD,
   },
 
-  // Force IPv4
-  family: 4,
+  requireTLS: true,
 
-  // Connection timeouts
   connectionTimeout: 20000,
   greetingTimeout: 20000,
   socketTimeout: 30000,
 });
 
-
 // ======================================================
-// VERIFY GMAIL SMTP CONNECTION
+// TEST GMAIL CONNECTION WHEN SERVER STARTS
 // ======================================================
 
 transporter
@@ -168,7 +160,6 @@ transporter
     console.error("Full Error:", error);
   });
 
-
 // ======================================================
 // EMAIL - SEND OTP
 // ======================================================
@@ -181,9 +172,7 @@ const sendEmailOtp = async (req, res) => {
       .trim()
       .toLowerCase();
 
-    // Validate email
-    const emailRegex =
-      /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!emailRegex.test(cleanEmail)) {
       return res.status(400).json({
@@ -192,30 +181,16 @@ const sendEmailOtp = async (req, res) => {
       });
     }
 
-
-    // ==================================================
-    // GENERATE RANDOM 6-DIGIT OTP
-    // ==================================================
-
+    // Generate random 6-digit OTP
     const otp = Math.floor(
       100000 + Math.random() * 900000
     ).toString();
-
-
-    // ==================================================
-    // STORE OTP
-    // ==================================================
 
     emailOtpStorage.set(cleanEmail, otp);
 
     console.log("========== EMAIL OTP ==========");
     console.log("Email:", cleanEmail);
     console.log("OTP:", otp);
-
-
-    // ==================================================
-    // EMAIL CONTENT
-    // ==================================================
 
     const mailOptions = {
       from: `"Sabka Fayda" <${process.env.EMAIL_USER}>`,
@@ -225,53 +200,42 @@ const sendEmailOtp = async (req, res) => {
       subject: "Sabka Fayda - Email Verification OTP",
 
       html: `
-        <div
-          style="
-            font-family: Arial, sans-serif;
-            max-width: 500px;
-            margin: auto;
-            padding: 30px;
-            text-align: center;
-            border: 1px solid #eeeeee;
-            border-radius: 15px;
-          "
-        >
+        <div style="
+          font-family: Arial, sans-serif;
+          max-width: 500px;
+          margin: auto;
+          padding: 30px;
+          text-align: center;
+          border: 1px solid #eeeeee;
+          border-radius: 15px;
+        ">
 
-          <h1
-            style="
-              color: #2196F3;
-              margin-bottom: 10px;
-            "
-          >
+          <h1 style="
+            color: #2196F3;
+            margin-bottom: 10px;
+          ">
             Sabka Fayda
           </h1>
 
-          <h2>
-            Email Verification
-          </h2>
+          <h2>Email Verification</h2>
 
-          <p
-            style="
-              color: #555555;
-              font-size: 16px;
-            "
-          >
-            Use the following OTP to verify
-            your email address:
+          <p style="
+            color: #555555;
+            font-size: 16px;
+          ">
+            Use the following OTP to verify your email address:
           </p>
 
-          <div
-            style="
-              font-size: 35px;
-              font-weight: bold;
-              letter-spacing: 8px;
-              color: #2196F3;
-              margin: 25px 0;
-              padding: 15px;
-              background-color: #E6F4FF;
-              border-radius: 10px;
-            "
-          >
+          <div style="
+            font-size: 35px;
+            font-weight: bold;
+            letter-spacing: 8px;
+            color: #2196F3;
+            margin: 25px 0;
+            padding: 15px;
+            background-color: #E6F4FF;
+            border-radius: 10px;
+          ">
             ${otp}
           </div>
 
@@ -280,13 +244,11 @@ const sendEmailOtp = async (req, res) => {
             <strong>10 minutes</strong>.
           </p>
 
-          <p
-            style="
-              color: grey;
-              font-size: 13px;
-              margin-top: 30px;
-            "
-          >
+          <p style="
+            color: grey;
+            font-size: 13px;
+            margin-top: 30px;
+          ">
             Do not share this OTP with anyone.
           </p>
 
@@ -294,29 +256,17 @@ const sendEmailOtp = async (req, res) => {
       `,
     };
 
-
     console.log(
       "Attempting to send email to:",
       cleanEmail
     );
 
-
-    // ==================================================
-    // SEND EMAIL
-    // ==================================================
-
-    const info = await transporter.sendMail(
-      mailOptions
-    );
+    const info = await transporter.sendMail(mailOptions);
 
     console.log("✅ EMAIL SENT SUCCESSFULLY");
     console.log("Message ID:", info.messageId);
 
-
-    // ==================================================
-    // DELETE OTP AFTER 10 MINUTES
-    // ==================================================
-
+    // Delete OTP after 10 minutes
     setTimeout(() => {
       emailOtpStorage.delete(cleanEmail);
 
@@ -325,11 +275,6 @@ const sendEmailOtp = async (req, res) => {
         cleanEmail
       );
     }, 10 * 60 * 1000);
-
-
-    // ==================================================
-    // SUCCESS RESPONSE
-    // ==================================================
 
     return res.status(200).json({
       success: true,
@@ -351,13 +296,10 @@ const sendEmailOtp = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to send email OTP",
-
-      // Temporary debugging
       error: error.message,
     });
   }
 };
-
 
 // ======================================================
 // EMAIL - VERIFY OTP
@@ -376,7 +318,6 @@ const verifyEmailOtp = async (req, res) => {
     const storedOtp =
       emailOtpStorage.get(cleanEmail);
 
-
     console.log(
       "========== VERIFY EMAIL OTP =========="
     );
@@ -385,8 +326,6 @@ const verifyEmailOtp = async (req, res) => {
     console.log("Entered OTP:", enteredOtp);
     console.log("Stored OTP:", storedOtp);
 
-
-    // OTP not found or expired
     if (!storedOtp) {
       return res.status(400).json({
         success: false,
@@ -394,8 +333,6 @@ const verifyEmailOtp = async (req, res) => {
       });
     }
 
-
-    // Invalid OTP
     if (String(storedOtp) !== enteredOtp) {
       return res.status(400).json({
         success: false,
@@ -403,18 +340,12 @@ const verifyEmailOtp = async (req, res) => {
       });
     }
 
-
-    // ==================================================
-    // OTP VERIFIED SUCCESSFULLY
-    // ==================================================
-
     emailOtpStorage.delete(cleanEmail);
 
     console.log(
       "✅ EMAIL VERIFIED:",
       cleanEmail
     );
-
 
     return res.status(200).json({
       success: true,
@@ -434,7 +365,6 @@ const verifyEmailOtp = async (req, res) => {
     });
   }
 };
-
 
 // ======================================================
 // EXPORTS
