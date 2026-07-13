@@ -1,9 +1,16 @@
-const dns = require("node:dns");
+const { Resend } = require("resend");
 
-// Prefer IPv4 before IPv6
-dns.setDefaultResultOrder("ipv4first");
+// ======================================================
+// RESEND CONFIGURATION
+// ======================================================
 
-const nodemailer = require("nodemailer");
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+console.log("========== RESEND CONFIG ==========");
+console.log(
+  "RESEND_API_KEY:",
+  process.env.RESEND_API_KEY ? "Loaded" : "NOT LOADED"
+);
 
 // ======================================================
 // OTP STORAGE
@@ -106,62 +113,7 @@ const verifyOtp = async (req, res) => {
 };
 
 // ======================================================
-// EMAIL CONFIG
-// ======================================================
-
-console.log("========== EMAIL CONFIG ==========");
-
-console.log(
-  "EMAIL_USER:",
-  process.env.EMAIL_USER ? "Loaded" : "NOT LOADED"
-);
-
-console.log(
-  "EMAIL_APP_PASSWORD:",
-  process.env.EMAIL_APP_PASSWORD ? "Loaded" : "NOT LOADED"
-);
-
-// ======================================================
-// GMAIL SMTP
-// IPv4 preferred + port 587
-// ======================================================
-
-const transporter = nodemailer.createTransport({
-  host: "smtp.gmail.com",
-  port: 587,
-  secure: false,
-
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_APP_PASSWORD,
-  },
-
-  requireTLS: true,
-
-  connectionTimeout: 20000,
-  greetingTimeout: 20000,
-  socketTimeout: 30000,
-});
-
-// ======================================================
-// TEST GMAIL CONNECTION WHEN SERVER STARTS
-// ======================================================
-
-transporter
-  .verify()
-  .then(() => {
-    console.log("✅ Gmail SMTP connection successful");
-  })
-  .catch((error) => {
-    console.error("❌ Gmail SMTP connection failed");
-    console.error("Message:", error.message);
-    console.error("Code:", error.code);
-    console.error("Response:", error.response);
-    console.error("Full Error:", error);
-  });
-
-// ======================================================
-// EMAIL - SEND OTP
+// EMAIL - SEND OTP USING RESEND
 // ======================================================
 
 const sendEmailOtp = async (req, res) => {
@@ -181,21 +133,33 @@ const sendEmailOtp = async (req, res) => {
       });
     }
 
+    if (!process.env.RESEND_API_KEY) {
+      console.error("RESEND_API_KEY is not configured");
+
+      return res.status(500).json({
+        success: false,
+        message: "Email service is not configured",
+      });
+    }
+
     // Generate random 6-digit OTP
     const otp = Math.floor(
       100000 + Math.random() * 900000
     ).toString();
 
-    emailOtpStorage.set(cleanEmail, otp);
-
     console.log("========== EMAIL OTP ==========");
     console.log("Email:", cleanEmail);
     console.log("OTP:", otp);
 
-    const mailOptions = {
-      from: `"Sabka Fayda" <${process.env.EMAIL_USER}>`,
+    // ==================================================
+    // SEND EMAIL USING RESEND
+    // ==================================================
 
-      to: cleanEmail,
+    const { data, error } = await resend.emails.send({
+      // For testing with Resend
+      from: "Sabka Fayda <onboarding@resend.dev>",
+
+      to: [cleanEmail],
 
       subject: "Sabka Fayda - Email Verification OTP",
 
@@ -254,17 +218,25 @@ const sendEmailOtp = async (req, res) => {
 
         </div>
       `,
-    };
+    });
 
-    console.log(
-      "Attempting to send email to:",
-      cleanEmail
-    );
+    // Resend returned an error
+    if (error) {
+      console.error("========== RESEND ERROR ==========");
+      console.error(error);
 
-    const info = await transporter.sendMail(mailOptions);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to send email OTP",
+        error: error.message,
+      });
+    }
+
+    // Store OTP only after email is successfully sent
+    emailOtpStorage.set(cleanEmail, otp);
 
     console.log("✅ EMAIL SENT SUCCESSFULLY");
-    console.log("Message ID:", info.messageId);
+    console.log("Resend Email ID:", data?.id);
 
     // Delete OTP after 10 minutes
     setTimeout(() => {
@@ -280,17 +252,12 @@ const sendEmailOtp = async (req, res) => {
       success: true,
       message: "OTP sent successfully to your email",
     });
-
   } catch (error) {
     console.error(
       "========== SEND EMAIL OTP ERROR =========="
     );
 
     console.error("Message:", error.message);
-    console.error("Code:", error.code);
-    console.error("Response:", error.response);
-    console.error("Response Code:", error.responseCode);
-    console.error("Command:", error.command);
     console.error("Full Error:", error);
 
     return res.status(500).json({
@@ -315,8 +282,7 @@ const verifyEmailOtp = async (req, res) => {
 
     const enteredOtp = String(otp || "").trim();
 
-    const storedOtp =
-      emailOtpStorage.get(cleanEmail);
+    const storedOtp = emailOtpStorage.get(cleanEmail);
 
     console.log(
       "========== VERIFY EMAIL OTP =========="
@@ -342,17 +308,13 @@ const verifyEmailOtp = async (req, res) => {
 
     emailOtpStorage.delete(cleanEmail);
 
-    console.log(
-      "✅ EMAIL VERIFIED:",
-      cleanEmail
-    );
+    console.log("✅ EMAIL VERIFIED:", cleanEmail);
 
     return res.status(200).json({
       success: true,
       message: "Email verified successfully",
       email: cleanEmail,
     });
-
   } catch (error) {
     console.error(
       "VERIFY EMAIL OTP ERROR:",
